@@ -1,6 +1,8 @@
 import streamlit as st
 import pickle
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 # Cargar el modelo ultraligero
 with open("modelo_RUL_ultraligero.pkl", "rb") as f:
@@ -29,12 +31,45 @@ for i, sensor in enumerate(sensores):
         valor = st.number_input(f"{sensor}", value=0.0, format="%.2f")
         valores.append(valor)
 
+# Inicializar historial
+if "historial" not in st.session_state:
+    st.session_state.historial = []
+
 # Botón de predicción
 if st.button("🔮 Predecir RUL"):
     entrada = np.array(valores).reshape(1, -1)
     prediccion = model.predict(entrada)[0]
     st.success(f"✅ Predicción de RUL: {prediccion:.2f} ciclos restantes")
 
-    # Mensaje de alerta si el RUL es bajo
     if prediccion < 30:
         st.warning("⚠️ Atención: el motor está cerca del final de su vida útil.")
+
+    # Guardar en historial
+    st.session_state.historial.append({
+        "RUL": round(prediccion, 2),
+        **{sensor: val for sensor, val in zip(sensores, valores)}
+    })
+
+# Mostrar historial de predicciones
+if st.session_state.historial:
+    st.subheader("📋 Historial de predicciones")
+    st.dataframe(pd.DataFrame(st.session_state.historial))
+
+# Visualizar importancia de sensores
+st.subheader("📊 Importancia de cada sensor en la predicción")
+
+try:
+    importancias = model.feature_importances_
+    df_importancia = pd.DataFrame({
+        'Sensor': sensores,
+        'Importancia': importancias
+    }).sort_values(by='Importancia', ascending=True)
+
+    fig, ax = plt.subplots()
+    ax.barh(df_importancia['Sensor'], df_importancia['Importancia'], color='teal')
+    ax.set_xlabel("Importancia")
+    ax.set_title("Importancia de sensores")
+    st.pyplot(fig)
+
+except AttributeError:
+    st.info("ℹ️ Este modelo no proporciona información de importancia de características.")
